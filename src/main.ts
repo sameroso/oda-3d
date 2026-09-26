@@ -1,24 +1,27 @@
 import './style.css'
 import * as THREE from 'three'
+import { createCourtyard, constrainPosition, nearestExhibit, exhibits } from './courtyard'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
-  <div class="viewport" aria-label="Interactive samurai training arena"></div>
-  <header><div class="brand"><span class="mark">侍</span><div>RONIN<span class="subtitle">MOVEMENT LAB / 01</span></div></div><span class="badge"><i></i> TRAINING GROUND</span></header>
-  <section class="intro"><span class="eyebrow">MECHA SERIES</span><h1>Find your stride.</h1><p>A little space to move.</p></section>
-  <aside class="telemetry"><span class="eyebrow">LOCOMOTION</span><strong id="state">Loading</strong><div class="meter"><i id="meter"></i></div><span id="speed">0.0 m/s</span></aside>
-  <footer><div class="controls"><span><kbd>W A S D</kbd> / <kbd>↑ ← ↓ →</kbd> Move</span><span><kbd>SHIFT</kbd> Run</span><span>Drag to orbit · Scroll to zoom</span></div><button id="reset">Reset position ↗</button></footer>
+  <div class="viewport" aria-label="Explorable manga courtyard"></div>
+  <header><div class="brand"><span class="mark">侍</span><div>RONIN<span class="subtitle">CHARACTER COURTYARD</span></div></div><span class="badge"><i></i> SIX CHARACTER STUDIES</span></header>
+  <section class="intro"><span class="eyebrow">THE MANGA COLLECTION</span><h1>Every path, a story.</h1><p>Walk up to a drawing to meet its character.</p></section>
+  <aside class="telemetry" hidden><span class="eyebrow">LOCOMOTION</span><strong id="state">Loading</strong><div class="meter"><i id="meter"></i></div><span id="speed">0.0 m/s</span></aside>
+  <footer><div class="controls"><span><kbd>W A S D</kbd> / <kbd>↑ ← ↓ →</kbd> Move</span><span><kbd>SHIFT</kbd> Run</span><span>Drag to orbit · Scroll to zoom</span></div><button id="reset">Return to center ↗</button></footer>
   <div class="touch"><button data-key="KeyW" aria-label="Move forward">↑</button><div><button data-key="KeyA" aria-label="Move left">←</button><button data-key="KeyS" aria-label="Move back">↓</button><button data-key="KeyD" aria-label="Move right">→</button><button data-key="ShiftLeft">RUN</button></div></div>
+  <section id="profile" hidden aria-live="polite"><span class="eyebrow">CHARACTER STUDY · PLACEHOLDER</span><h2 id="profile-name"></h2><p id="profile-description"></p><button id="inspect">Inspect artwork <kbd>E</kbd></button></section>
+  <dialog id="inspection" aria-labelledby="inspection-name"><button id="close-inspection" aria-label="Close artwork inspection">Close ✕</button><img id="inspection-art" alt=""><div><span class="eyebrow">MANGA COLLECTION · PLACEHOLDER</span><h2 id="inspection-name"></h2><p id="inspection-description"></p><small>Press Esc or Close to return to the courtyard.</small></div></dialog>
   <div id="loading" role="status"><span class="spinner"></span><strong>Preparing your mecha</strong><span>Loading walking & running animations…</span></div>`
 const stateLabel = document.querySelector<HTMLElement>('#state')!
 const speedLabel = document.querySelector<HTMLElement>('#speed')!
 const meter = document.querySelector<HTMLElement>('#meter')!
 const loading = document.querySelector<HTMLElement>('#loading')!
 const scene = new THREE.Scene()
-scene.background = new THREE.Color('#dce5e2')
-scene.fog = new THREE.Fog('#dce5e2', 28, 75)
+scene.background = new THREE.Color('#e7e5d9')
+scene.fog = new THREE.Fog('#e7e5d9', 28, 75)
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 120)
 camera.position.set(6, 4.5, 8)
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -44,29 +47,18 @@ sun.shadow.mapSize.set(2048, 2048)
 Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, far: 60 })
 sun.shadow.normalBias = 0.035
 scene.add(sun)
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xc3ceca, roughness: 0.95 }))
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x9ba58c, roughness: 0.95 }))
 floor.rotation.x = -Math.PI / 2
 floor.receiveShadow = true
 scene.add(floor)
-const grid = new THREE.GridHelper(44, 44, 0x8caaa0, 0xb1c0b9)
-grid.position.y = 0.012
-scene.add(grid)
-const ring = new THREE.Mesh(new THREE.RingGeometry(20.8, 21, 128), new THREE.MeshBasicMaterial({ color: 0x63887c, side: THREE.DoubleSide }))
-ring.rotation.x = -Math.PI / 2
-ring.position.y = 0.018
-scene.add(ring)
-for (let i = 0; i < 16; i++) {
-  const angle = i / 16 * Math.PI * 2
-  const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.7, 0.22), new THREE.MeshStandardMaterial({ color: 0x365c50, roughness: 0.6 }))
-  post.position.set(Math.sin(angle) * 22, 0.35, Math.cos(angle) * 22)
-  post.castShadow = true
-  scene.add(post)
-}
+createCourtyard(scene)
 const player = new THREE.Group()
 scene.add(player)
 const keys = new Set<string>()
 const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'])
 window.addEventListener('keydown', event => {
+  if (event.code === 'KeyE' && !event.repeat && !inspection.open) openInspection()
+  if (inspection.open) return
   if (movementKeys.has(event.code)) { event.preventDefault(); keys.add(event.code) }
 })
 window.addEventListener('keyup', event => keys.delete(event.code))
@@ -74,7 +66,7 @@ function clearInput() { keys.clear(); document.querySelectorAll('.touch button')
 window.addEventListener('blur', clearInput)
 document.addEventListener('visibilitychange', clearInput)
 document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(button => {
-  button.addEventListener('pointerdown', event => { event.preventDefault(); button.setPointerCapture(event.pointerId); keys.add(button.dataset.key!); button.classList.add('pressed') })
+  button.addEventListener('pointerdown', event => { event.preventDefault(); if (inspection.open) return; button.setPointerCapture(event.pointerId); keys.add(button.dataset.key!); button.classList.add('pressed') })
   const release = () => { keys.delete(button.dataset.key!); button.classList.remove('pressed') }
   button.addEventListener('pointerup', release)
   button.addEventListener('pointercancel', release)
@@ -92,6 +84,39 @@ const previousPosition = new THREE.Vector3()
 const cameraShift = new THREE.Vector3()
 const targetRotation = new THREE.Quaternion()
 const up = new THREE.Vector3(0, 1, 0)
+const profile = document.querySelector<HTMLElement>('#profile')!
+const inspection = document.querySelector<HTMLDialogElement>('#inspection')!
+const inspectButton = document.querySelector<HTMLButtonElement>('#inspect')!
+let activeExhibit = -1
+function updateProfile() {
+  const next = nearestExhibit(player.position, activeExhibit)
+  if (next === activeExhibit) return
+  activeExhibit = next
+  profile.hidden = next < 0
+  if (next < 0) return
+  document.querySelector('#profile-name')!.textContent = exhibits[next].name
+  document.querySelector('#profile-description')!.textContent = exhibits[next].description
+}
+function openInspection() {
+  if (activeExhibit < 0 || !mixer) return
+  const exhibit = exhibits[activeExhibit]
+  const art = document.querySelector<HTMLImageElement>('#inspection-art')!
+  art.src = exhibit.image
+  art.alt = exhibit.name + ' — placeholder for the original manga drawing'
+  document.querySelector('#inspection-name')!.textContent = exhibit.name
+  document.querySelector('#inspection-description')!.textContent = exhibit.description
+  clearInput()
+  velocity.set(0, 0, 0)
+  orbit.enabled = false
+  inspection.showModal()
+}
+inspectButton.addEventListener('click', openInspection)
+document.querySelector('#close-inspection')!.addEventListener('click', () => inspection.close())
+inspection.addEventListener('close', () => {
+  clearInput()
+  orbit.enabled = true
+  inspectButton.focus({ preventScroll: true })
+})
 function reset() {
   clearInput()
   player.position.set(0, 0, 0)
@@ -170,7 +195,7 @@ let lastTime = performance.now()
 renderer.setAnimationLoop(now => {
   const dt = Math.min((now - lastTime) / 1000, 0.05)
   lastTime = now
-  if (mixer) {
+  if (mixer && !inspection.open) {
     const x = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'))
     const z = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'))
     camera.getWorldDirection(forward)
@@ -183,7 +208,8 @@ renderer.setAnimationLoop(now => {
     if (velocity.lengthSq() < 0.0001) velocity.set(0, 0, 0)
     previousPosition.copy(player.position)
     player.position.addScaledVector(velocity, dt)
-    if (player.position.length() > 20) player.position.setLength(20)
+    constrainPosition(player.position)
+    updateProfile()
     speed = player.position.distanceTo(previousPosition) / Math.max(dt, 0.001)
     if (speed > 0.05) {
       targetRotation.setFromAxisAngle(up, Math.atan2(velocity.x, velocity.z))
