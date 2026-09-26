@@ -7,8 +7,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
   <div class="viewport" aria-label="Explorable manga courtyard"></div>
-  <header><div class="brand"><span class="mark">侍</span><div>RONIN<span class="subtitle">CHARACTER COURTYARD</span></div></div><span class="badge"><i></i> SIX CHARACTER STUDIES</span></header>
-  <section class="intro"><span class="eyebrow">THE MANGA COLLECTION</span><h1>Every path, a story.</h1><p>Walk up to a drawing to meet its character.</p></section>
+  <header><div class="brand"><span class="mark">侍</span><div>A ESPADA DE ODA<span class="subtitle">CONHEÇA OS PERSONAGENS</span></div></div><span class="badge"><i></i> SIX CHARACTER STUDIES</span></header>
+  <section class="intro"></section>
   <aside class="telemetry" hidden><span class="eyebrow">LOCOMOTION</span><strong id="state">Loading</strong><div class="meter"><i id="meter"></i></div><span id="speed">0.0 m/s</span></aside>
   <footer><div class="controls"><span><kbd>W A S D</kbd> / <kbd>↑ ← ↓ →</kbd> Move</span><span><kbd>SHIFT</kbd> Run</span><span>Drag to orbit · Scroll to zoom</span></div><button id="reset">Return to center ↗</button></footer>
   <div class="touch"><button data-key="KeyW" aria-label="Move forward">↑</button><div><button data-key="KeyA" aria-label="Move left">←</button><button data-key="KeyS" aria-label="Move back">↓</button><button data-key="KeyD" aria-label="Move right">→</button><button data-key="ShiftLeft">RUN</button></div></div>
