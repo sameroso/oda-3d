@@ -9,10 +9,22 @@ const assert = require('node:assert/strict');
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/src/main.ts*', async route => {
       const response = await route.fetch();
-      await route.fulfill({ response, body: await response.text() + '\nwindow.__layout = { scene, camera, orbit, player, exhibits, constrainPosition, nearestExhibit, renderer };' });
+      await route.fulfill({ response, body: await response.text() + '\nwindow.__layout = { THREE, scene, camera, orbit, player, exhibits, constrainPosition, nearestExhibit, renderer };' });
     });
     await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173/');
     await page.locator('#loading').waitFor({ state: 'hidden', timeout: 120000 });
+    await page.evaluate(() => {
+      const { THREE: T, scene, player } = window.__layout;
+      const ray = new T.Raycaster(new T.Vector3(player.position.x, 1, player.position.z), new T.Vector3(0, -1, 0));
+      const ground = ray.intersectObject(scene.getObjectByName('Overgrown Japanese location'), true)[0].point.y;
+      const feet = new T.Box3().setFromObject(player, true).min.y;
+      if (feet < ground || feet - ground > 0.03) throw new Error(`Feet are not on the paving: feet=${feet}, ground=${ground}`);
+      for (const object of scene.children.filter(object => object.name.startsWith('Character display:'))) {
+        const bounds = new T.Box3().setFromObject(object);
+        if (bounds.max.y - bounds.min.y < 3) throw new Error('Display is too short compared to the character');
+        if (Math.abs(bounds.min.y - ground) > 0.03) throw new Error('Display base is not on the paving');
+      }
+    });
     for (let index = 0; index < 6; index++) {
       const name = await page.evaluate(index => {
         const { player, exhibits, constrainPosition, nearestExhibit } = window.__layout;
@@ -21,7 +33,7 @@ const assert = require('node:assert/strict');
         const p = e.position.clone();
         constrainPosition(p);
         const dx = p.x - e.position.x, dz = p.z - e.position.z;
-        if (Math.abs(cosine * dx - sine * dz) < 1.16 - 1e-6 && Math.abs(sine * dx + cosine * dz) < 0.62 - 1e-6) throw new Error('Display collision failed');
+        if (Math.abs(cosine * dx - sine * dz) < 1.79 - 1e-6 && Math.abs(sine * dx + cosine * dz) < 0.83 - 1e-6) throw new Error('Display collision failed');
         p.copy(e.position); p.x -= sine; p.z -= cosine;
         if (nearestExhibit(p) === index) throw new Error('Display activates from behind');
         player.position.copy(e.position);

@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
-const displayScale = 0.45
+// The imported courtyard paving is at y=0.192; leave a small contact clearance.
+export const courtyardFloorHeight = 0.2
+const displayScale = 0.8
 const displayHalfWidth = 1.8 * displayScale + 0.35
 const displayHalfDepth = 0.6 * displayScale + 0.35
 
@@ -39,8 +41,8 @@ export const exhibits: { name: string; description: string; image: string; posit
   name: 'Princesa Thakane',
   description: 'Esta é a Princesa Thakane. Gosta de shopping centers.',
   image: `${import.meta.env.BASE_URL}exhibits/princesa-thakane.png`,
-  position: new THREE.Vector3(1.1, 0, 5.4),
-  rotation: Math.atan2(-1.1, -5.4),
+  position: new THREE.Vector3(-4.1, 0, 5.8),
+  rotation: Math.atan2(4.1, -5.8),
 }]
 
 
@@ -62,6 +64,7 @@ export async function createCourtyard(scene: THREE.Scene) {
   }
   const loader = new THREE.TextureLoader()
   for (const exhibit of exhibits) {
+    exhibit.position.y = courtyardFloorHeight
     const display = new THREE.Group()
     display.name = `Character display: ${exhibit.name}`
     display.scale.setScalar(displayScale)
@@ -81,6 +84,7 @@ export async function createCourtyard(scene: THREE.Scene) {
 }
 
 export function constrainPosition(position: THREE.Vector3) {
+  position.y = courtyardFloorHeight
   position.x = THREE.MathUtils.clamp(position.x, -11.3, 11.3)
   position.z = THREE.MathUtils.clamp(position.z, -11.2, 11.2)
   for (const exhibit of exhibits) {
