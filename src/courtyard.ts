@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
-const displayScale = 0.7
+const displayScale = 0.45
 const displayHalfWidth = 1.8 * displayScale + 0.35
 const displayHalfDepth = 0.6 * displayScale + 0.35
 
@@ -109,7 +109,7 @@ export function nearestExhibit(position: THREE.Vector3, current = -1) {
     const front = (position.x - exhibit.position.x) * Math.sin(exhibit.rotation)
       + (position.z - exhibit.position.z) * Math.cos(exhibit.rotation)
     const nextDistance = position.distanceTo(exhibit.position)
-    if (front > displayHalfDepth && nextDistance < (index === current ? 2.8 : 2.4) && nextDistance < distance) {
+    if (front > displayHalfDepth && nextDistance < (index === current ? 2.1 : 1.8) && nextDistance < distance) {
       nearest = index
       distance = nextDistance
     }
