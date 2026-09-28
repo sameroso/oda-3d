@@ -19,6 +19,8 @@ const stateLabel = document.querySelector<HTMLElement>('#state')!
 const speedLabel = document.querySelector<HTMLElement>('#speed')!
 const meter = document.querySelector<HTMLElement>('#meter')!
 const loading = document.querySelector<HTMLElement>('#loading')!
+loading.querySelector('strong')!.textContent = 'Preparing the courtyard'
+loading.querySelector('span:last-child')!.textContent = 'Loading environment and characters...'
 const scene = new THREE.Scene()
 scene.background = new THREE.Color('#e7e5d9')
 scene.fog = new THREE.Fog('#e7e5d9', 28, 75)
@@ -33,7 +35,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping
 renderer.toneMappingExposure = 1.2
 app.querySelector('.viewport')!.appendChild(renderer.domElement)
 const orbit = new OrbitControls(camera, renderer.domElement)
-orbit.target.set(0, 1.2, 0)
+orbit.target.set(0, 1.2, 3)
 orbit.enableDamping = true
 orbit.enablePan = false
 orbit.minDistance = 4
@@ -47,12 +49,8 @@ sun.shadow.mapSize.set(2048, 2048)
 Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, far: 60 })
 sun.shadow.normalBias = 0.035
 scene.add(sun)
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x9ba58c, roughness: 0.95 }))
-floor.rotation.x = -Math.PI / 2
-floor.receiveShadow = true
-scene.add(floor)
-createCourtyard(scene)
 const player = new THREE.Group()
+player.position.set(0, 0, 3)
 scene.add(player)
 const keys = new Set<string>()
 const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'])
@@ -73,6 +71,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(button => {
   button.addEventListener('lostpointercapture', release)
 })
 let mixer: THREE.AnimationMixer | undefined
+let skeletonMixer: THREE.AnimationMixer | undefined
 let actions: Record<string, THREE.AnimationAction> = {}
 let currentState = 'Idle'
 let speed = 0
@@ -119,11 +118,11 @@ inspection.addEventListener('close', () => {
 })
 function reset() {
   clearInput()
-  player.position.set(0, 0, 0)
+  player.position.set(0, 0, 3)
   player.rotation.set(0, 0, 0)
   velocity.set(0, 0, 0)
   camera.position.set(6, 4.5, 8)
-  orbit.target.set(0, 1.2, 0)
+  orbit.target.set(0, 1.2, 3)
   orbit.update()
 }
 document.querySelector('#reset')!.addEventListener('click', reset)
@@ -141,6 +140,30 @@ function inPlace(source: THREE.AnimationClip) {
   }
   return clip
 }
+// Animated test model beside the player's starting position.
+async function loadTestSkeleton() {
+  const { scene: skeleton, animations } = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}skeleton_textured.glb`)
+  skeleton.name = 'Test skeleton'
+  skeleton.updateMatrixWorld(true)
+  const bounds = new THREE.Box3().setFromObject(skeleton)
+  const height = bounds.getSize(new THREE.Vector3()).y
+  if (!Number.isFinite(height) || height <= 0) throw new Error('The test skeleton has invalid bounds.')
+  skeleton.scale.multiplyScalar(2.7 / height)
+  skeleton.updateMatrixWorld(true)
+  bounds.setFromObject(skeleton)
+  const center = bounds.getCenter(new THREE.Vector3())
+  skeleton.position.add(new THREE.Vector3(3 - center.x, 0.0325 - bounds.min.y, -center.z))
+  skeleton.traverse(object => {
+    if (object instanceof THREE.Mesh) { object.castShadow = true; object.receiveShadow = true }
+  })
+  scene.add(skeleton)
+  if (!animations[0]) throw new Error('The test skeleton has no animation clip.')
+  skeletonMixer = new THREE.AnimationMixer(skeleton)
+  skeletonMixer.clipAction(inPlace(animations[0])).setLoop(THREE.LoopRepeat, Infinity).play()
+  skeletonMixer.update(0)
+}
+loadTestSkeleton().catch(error => console.error('Unable to load the test skeleton:', error))
+
 async function loadCharacter() {
   const loader = new GLTFLoader()
   const base = import.meta.env.BASE_URL
@@ -180,14 +203,17 @@ async function loadCharacter() {
   actions = { Idle: mixer.clipAction(idle), Walking: mixer.clipAction(walk), Running: mixer.clipAction(run) }
   actions.Idle.play()
   mixer.update(0)
-  loading.hidden = true
   stateLabel.textContent = 'Idle'
 }
-loadCharacter().catch(error => {
+let sceneReady = false
+Promise.all([createCourtyard(scene), loadCharacter()]).then(() => {
+  sceneReady = true
+  loading.hidden = true
+}).catch(error => {
   console.error(error)
   loading.replaceChildren()
   const message = document.createElement('strong')
-  message.textContent = 'Unable to load the mecha. Please reload to try again.'
+  message.textContent = 'Unable to load the scene. Please reload to try again.'
   loading.append(message)
   stateLabel.textContent = 'Load failed'
 })
@@ -195,7 +221,8 @@ let lastTime = performance.now()
 renderer.setAnimationLoop(now => {
   const dt = Math.min((now - lastTime) / 1000, 0.05)
   lastTime = now
-  if (mixer && !inspection.open) {
+  if (!inspection.open) skeletonMixer?.update(dt)
+  if (sceneReady && mixer && !inspection.open) {
     const x = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'))
     const z = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'))
     camera.getWorldDirection(forward)
